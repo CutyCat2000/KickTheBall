@@ -97,7 +97,7 @@
       if (keyCode === 37) playerMovement.left = false;
       if (keyCode === 39) playerMovement.right = false;
     });
-    const ballGeometry = new THREE.SphereGeometry(3, 32, 32);
+    const ballGeometry = new THREE.SphereGeometry(0.7, 32, 32);
     const ballMaterial = new THREE.MeshStandardMaterial({color: 0xff0000});
     const ball = new THREE.Mesh(ballGeometry, ballMaterial);
     ball.position.set(12, 3, 12);

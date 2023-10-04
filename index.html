@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>3D Block World</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+    }
+
+    canvas {
+      display: block;
+    }
+
+    #score {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      color: yellow;
+      font-size: 24px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="score">Score: <span id="scoreValue">0</span></div>
+  <canvas id="world"></canvas>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/110/three.min.js"></script>
+  <script>
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(60, 60, 60);
+    camera.lookAt(0, 0, 0);
+
+    const renderer = new THREE.WebGLRenderer({canvas: document.getElementById('world')});
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    const geometry = new THREE.BoxGeometry();
+    const material = new THREE.MeshStandardMaterial({color: 0x00ff00});
+    const player = new THREE.Mesh(geometry, material);
+    scene.add(player);
+    player.position.set(0, 3, 0);
+    player.castShadow = true;
+    const groundGeometry = new THREE.PlaneGeometry(48, 48, 10, 10);
+    const groundMaterial = new THREE.MeshStandardMaterial({color: 0x888888, side: THREE.DoubleSide});
+    const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+    ground.position.y = -0.01;
+    ground.rotation.x = Math.PI / 2;
+    ground.receiveShadow = true;
+    scene.add(ground);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+    directionalLight.position.set(30, 60, 30);
+    directionalLight.castShadow = true;
+    scene.add(directionalLight);
+    let score = 0;
+    const scoreElement = document.getElementById('scoreValue');
+    const minX = -20;
+    const maxX = 25;
+    const minZ = -20;
+    const maxZ = 25;
+    const moveSpeed = 0.1;
+    let jumping = false;
+    const jumpVelocity = 0.2;
+    const jumpHeight = 2.0;
+    const playerMovement = {
+      forward: false,
+      backward: false,
+      left: false,
+      right: false,
+    };
+    document.addEventListener('keydown', (event) => {
+      const keyCode = event.keyCode;
+      if (keyCode === 87) playerMovement.forward = true;
+      if (keyCode === 83) playerMovement.backward = true;
+      if (keyCode === 65) playerMovement.left = true;
+      if (keyCode === 68) playerMovement.right = true;
+      if (keyCode === 38) playerMovement.forward = true;
+      if (keyCode === 40) playerMovement.backward = true;
+      if (keyCode === 37) playerMovement.left = true;
+      if (keyCode === 39) playerMovement.right = true;
+      if (keyCode === 32 && !jumping) {
+        jumping = true;
+        playerVelocity.y = jumpVelocity;
+      }
+    });
+
+    document.addEventListener('keyup', (event) => {
+      const keyCode = event.keyCode;
+      if (keyCode === 87) playerMovement.forward = false;
+      if (keyCode === 83) playerMovement.backward = false;
+      if (keyCode === 65) playerMovement.left = false;
+      if (keyCode === 68) playerMovement.right = false;
+      if (keyCode === 38) playerMovement.forward = false;
+      if (keyCode === 40) playerMovement.backward = false;
+      if (keyCode === 37) playerMovement.left = false;
+      if (keyCode === 39) playerMovement.right = false;
+    });
+    const ballGeometry = new THREE.SphereGeometry(3, 32, 32);
+    const ballMaterial = new THREE.MeshStandardMaterial({color: 0xff0000});
+    const ball = new THREE.Mesh(ballGeometry, ballMaterial);
+    ball.position.set(12, 3, 12);
+    ball.castShadow = true;
+    scene.add(ball);
+    const ballStartPosition = new THREE.Vector3(12, 3, 12);
+    const gravity = -0.01;
+    const playerVelocity = new THREE.Vector3(0, 0, 0);
+    const ballVelocity = new THREE.Vector3(0, 0, 0);
+    let ballOutOfBounds = false;
+    const animate = () => {
+      requestAnimationFrame(animate);
+      if (player.position.y > 3) {
+        playerVelocity.y += gravity;
+      } else {
+        playerVelocity.y = 0;
+        if (jumping) {
+          jumping = false;
+          playerVelocity.y = jumpVelocity;
+        }
+        player.position.y = 3;
+      }
+      if (ball.position.y > 3) {
+        ballVelocity.y += gravity;
+      } else {
+        ballVelocity.y = 0;
+        ball.position.y = 3;
+      }
+      if (playerMovement.forward && player.position.z > minZ) player.translateZ(-moveSpeed);
+      if (playerMovement.backward && player.position.z < maxZ) player.translateZ(moveSpeed);
+      if (playerMovement.left && player.position.x > minX) player.translateX(-moveSpeed);
+      if (playerMovement.right && player.position.x < maxX) player.translateX(moveSpeed);
+      player.position.add(playerVelocity);
+      camera.position.copy(player.position).add(new THREE.Vector3(30, 30, 30));
+      camera.lookAt(player.position);
+      const playerBox = new THREE.Box3().setFromObject(player);
+      const ballBox = new THREE.Box3().setFromObject(ball);
+      if (playerBox.intersectsBox(ballBox)) {
+        const direction = new THREE.Vector3().copy(ball.position).sub(player.position).normalize();
+        const kickForce = 0.2;
+        ballVelocity.copy(direction.multiplyScalar(kickForce));
+        if (ball.position.y < 3) {
+          ball.position.y = 3;
+          ballVelocity.y = 0;
+        }
+      }
+      if (ballVelocity) {
+        ball.position.add(ballVelocity);
+        ballVelocity.multiplyScalar(0.98);
+      }
+      const respawnDistance = 6.0;
+      const playerToBallDistance = player.position.distanceTo(ballStartPosition);
+      if (playerToBallDistance > respawnDistance && ballOutOfBounds) {
+        score++;
+        scoreElement.textContent = score;
+        ball.position.copy(ballStartPosition);
+        ballVelocity.set(0, 0, 0);
+        ballOutOfBounds = false;
+      }
+      if (
+        ball.position.x < minX ||
+        ball.position.x > maxX ||
+        ball.position.z < minZ ||
+        ball.position.z > maxZ
+      ) {
+        ballOutOfBounds = true;
+      }
+
+      renderer.render(scene, camera);
+    };
+
+    animate();
+  </script>
+</body>
+
+</html>
